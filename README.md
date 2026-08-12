@@ -14,12 +14,14 @@ changes land through pull requests. No application code yet.
 
 ## Repository layout
 
-```
+```text
 .
-├── .cursor/         Editor configuration shared with the repo
-├── .gitignore       Files git should never track
-├── CONTRIBUTING.md  Branch protection rules and the day-to-day git workflow
-└── README.md        This file
+├── .cursor/                    Editor configuration shared with the repo
+├── .github/workflows/ci.yml    Checks that run on every pull request
+├── .gitignore                  Files git should never track
+├── .markdownlint-cli2.jsonc    Markdown lint rules
+├── CONTRIBUTING.md             Branch protection rules and the git workflow
+└── README.md                   This file
 ```
 
 ## Local setup

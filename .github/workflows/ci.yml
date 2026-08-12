@@ -1,0 +1,54 @@
+name: CI
+
+# Run on proposed changes and on main itself. The pull_request trigger is what
+# produces the checks that gate merging; the push trigger catches anything that
+# reaches main another way and keeps the default branch's status honest.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Grant the job token the least it needs. The default is broader than this.
+permissions:
+  contents: read
+
+# A new push to a branch makes the previous run obsolete, so cancel it rather
+# than paying for a result nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdown:
+    name: Markdown lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # A step is just a shell command. Running the same command locally is
+      # what keeps CI from becoming the place you discover problems.
+      - name: Lint markdown
+        run: npx --yes markdownlint-cli2 "**/*.md"
+
+  links:
+    name: Link check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # --offline resolves relative links against the checkout and skips the
+      # network entirely, so this fails only on genuinely broken links rather
+      # than on someone else's server being slow.
+      - name: Check relative links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --offline --no-progress --verbose "**/*.md"
+          fail: true
