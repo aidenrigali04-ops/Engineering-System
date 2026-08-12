@@ -1,0 +1,55 @@
+name: Task
+description: A piece of work to be done
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What
+      description: One or two sentences describing the work.
+      placeholder: Add a health check endpoint that reports whether the service is running.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: >-
+        What this makes possible, or what problem it solves. If you cannot
+        answer this, the task probably is not ready to start.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: >-
+        How you will know it is finished. Write these as checkable statements,
+        not as a plan.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      description: A rough guess. Anything larger than an evening should be split.
+      options:
+        - S — under an hour
+        - M — an evening
+        - L — multiple sessions, should probably be split
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes and dependencies
+      description: Anything that must land first, or decisions still open.
+    validations:
+      required: false

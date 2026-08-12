@@ -18,6 +18,7 @@ a small module that enforces this repository's own branch naming convention.
 ```text
 .
 ├── .cursor/                    Editor configuration shared with the repo
+├── .github/ISSUE_TEMPLATE/     Issue forms for tasks and bugs
 ├── .github/workflows/ci.yml    Checks that run on every pull request
 ├── .gitignore                  Files git should never track
 ├── .markdownlint-cli2.jsonc    Markdown lint rules
@@ -85,7 +86,7 @@ Tooling to layer in, roughly in the order it becomes useful:
 - [ ] Pre-commit hooks so failures surface before pushing
 - [ ] Automated dependency updates
 - [ ] Static type checking
-- [ ] Issue tracking and project planning
+- [x] Issue tracking and project planning
 - [ ] Semantic versioning and releases
 - [ ] Containerization
 - [ ] Deployment and environments

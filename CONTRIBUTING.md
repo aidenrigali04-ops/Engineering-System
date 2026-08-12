@@ -20,6 +20,32 @@ deletes the remote branch automatically once a pull request merges.
 Approvals are set to zero so solo work is not deadlocked. Raise this the moment a
 second person joins the repository.
 
+## Planning work
+
+Work starts as an issue, not as a branch. Opening an issue first forces you to
+say what done looks like before you are attached to a particular solution.
+
+Issues use templates in `.github/ISSUE_TEMPLATE/`. Blank issues are disabled on
+purpose: an issue without acceptance criteria is a note to self, not a unit of
+work.
+
+Every issue carries three labels, because each answers a different question:
+
+| Label group | Question it answers |
+| --- | --- |
+| `bug`, `enhancement`, `chore`, `documentation` | What kind of work is this? |
+| `priority: high` / `medium` / `low` | Does this come before other work? |
+| `size: S` / `M` / `L` | How much appetite does it need? |
+
+`size: L` is a warning, not a badge. Anything that cannot be finished in one
+sitting should usually be split, because a branch that stays open for a week
+drifts away from `main` and becomes painful to merge.
+
+Add `blocked` when something else must land first, and say what in a comment.
+
+Pull requests should close their issue with `Closes #12` in the description, so
+merging the pull request closes the issue automatically.
+
 ## The loop
 
 Start from an up-to-date `main`:

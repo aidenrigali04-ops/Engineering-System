@@ -1,0 +1,53 @@
+name: Bug report
+description: Something behaves differently than it should
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The actual behaviour, described precisely.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: >-
+        Stating this separately is the point. A surprising number of bugs turn
+        out to be a disagreement about what correct means.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        The smallest sequence that triggers it. A bug you cannot reproduce is a
+        bug you cannot confirm you fixed.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node version, operating system, and anything else relevant.
+      placeholder: Node 20.19.2, macOS 15
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Paste the actual output. It is automatically formatted as code.
+      render: shell
+    validations:
+      required: false

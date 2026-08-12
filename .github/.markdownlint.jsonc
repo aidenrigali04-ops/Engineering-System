@@ -1,0 +1,6 @@
+{
+  // Templates are document fragments that get pasted into a text box, not
+  // documents in their own right, so requiring a top-level heading is wrong
+  // here. Scoped to .github/ so real documents still have to comply.
+  "MD041": false,
+}
