@@ -9,8 +9,9 @@ Features exist only as excuses to exercise the tooling.
 
 ## Status
 
-Bootstrapping. The repository is connected to GitHub, `main` is protected, and
-changes land through pull requests. No application code yet.
+Bootstrapping. `main` is protected, changes land through pull requests, and CI
+runs tests, linting, and formatting on every one. The only source code so far is
+a small module that enforces this repository's own branch naming convention.
 
 ## Repository layout
 
@@ -20,19 +21,41 @@ changes land through pull requests. No application code yet.
 ├── .github/workflows/ci.yml    Checks that run on every pull request
 ├── .gitignore                  Files git should never track
 ├── .markdownlint-cli2.jsonc    Markdown lint rules
+├── .nvmrc                      Node version used locally and in CI
+├── .prettierrc.json            Formatting rules
+├── eslint.config.js            JavaScript lint rules
+├── package.json                Scripts and pinned tooling
+├── scripts/                    Command line entry points used by CI
+├── src/                        Source code
+├── test/                       Tests, mirroring src/
 ├── CONTRIBUTING.md             Branch protection rules and the git workflow
 └── README.md                   This file
 ```
 
 ## Local setup
 
-Clone the repository and confirm git can talk to GitHub:
+Requires the Node version in `.nvmrc`.
 
 ```bash
 git clone https://github.com/aidenrigali04-ops/Engineering-System.git
 cd Engineering-System
-git remote -v
+nvm use          # or install the version named in .nvmrc
+npm ci           # install exactly what the lockfile specifies
+npm run check    # run everything CI runs
 ```
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm test` | Run the test suite |
+| `npm run test:watch` | Re-run tests as files change |
+| `npm run test:coverage` | Run tests with a coverage report |
+| `npm run lint` | Lint JavaScript |
+| `npm run lint:md` | Lint markdown |
+| `npm run format` | Rewrite files to match the formatting rules |
+| `npm run format:check` | Fail if anything is unformatted |
+| `npm run check` | Everything above, in the order CI runs it |
 
 ## Workflow
 
@@ -55,10 +78,13 @@ Tooling to layer in, roughly in the order it becomes useful:
 - [x] Git fundamentals: repository, commits, remotes, branches
 - [x] Branch protection rules on `main`
 - [x] Pull requests and code review on GitHub
-- [ ] Continuous integration with GitHub Actions
-- [ ] Automated testing and a test runner
-- [ ] Linting and formatting enforced in CI
-- [ ] Dependency management and lockfiles
+- [x] Continuous integration with GitHub Actions
+- [x] Automated testing and a test runner
+- [x] Linting and formatting enforced in CI
+- [x] Dependency management and lockfiles
+- [ ] Pre-commit hooks so failures surface before pushing
+- [ ] Automated dependency updates
+- [ ] Static type checking
 - [ ] Issue tracking and project planning
 - [ ] Semantic versioning and releases
 - [ ] Containerization
