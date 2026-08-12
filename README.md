@@ -9,8 +9,8 @@ Features exist only as excuses to exercise the tooling.
 
 ## Status
 
-Bootstrapping. The repository is connected to GitHub and has a baseline commit.
-No application code yet.
+Bootstrapping. The repository is connected to GitHub, `main` is protected, and
+changes land through pull requests. No application code yet.
 
 ## Repository layout
 
@@ -18,6 +18,7 @@ No application code yet.
 .
 ├── .cursor/         Editor configuration shared with the repo
 ├── .gitignore       Files git should never track
+├── CONTRIBUTING.md  Branch protection rules and the day-to-day git workflow
 └── README.md        This file
 ```
 
@@ -34,7 +35,8 @@ git remote -v
 ## Workflow
 
 Work happens on short-lived branches and lands on `main` through a pull request.
-`main` is intended to always be in a working state.
+`main` is protected, so this is enforced rather than optional. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full rules.
 
 ```bash
 git switch -c descriptive-branch-name   # start work
@@ -49,8 +51,8 @@ gh pr create                            # open a pull request
 Tooling to layer in, roughly in the order it becomes useful:
 
 - [x] Git fundamentals: repository, commits, remotes, branches
-- [ ] Pull requests and code review on GitHub
-- [ ] Branch protection rules on `main`
+- [x] Branch protection rules on `main`
+- [x] Pull requests and code review on GitHub
 - [ ] Continuous integration with GitHub Actions
 - [ ] Automated testing and a test runner
 - [ ] Linting and formatting enforced in CI
