@@ -12,6 +12,10 @@ directly; every change arrives through a pull request.
 | Force pushes blocked | Published history cannot be rewritten |
 | Deletions blocked | `main` cannot be deleted |
 | Conversation resolution required | Every review comment must be resolved before merge |
+| CI must pass | A pull request cannot merge while any check is failing |
+
+The repository itself has merge commits disabled, leaving squash and rebase, and
+deletes the remote branch automatically once a pull request merges.
 
 Approvals are set to zero so solo work is not deadlocked. Raise this the moment a
 second person joins the repository.
@@ -54,6 +58,27 @@ git pull
 git branch -d docs/contributing-workflow
 ```
 
+## Continuous integration
+
+Every pull request runs the checks in `.github/workflows/ci.yml`. They must pass
+before the pull request can merge.
+
+| Check | What it verifies |
+| --- | --- |
+| Markdown lint | Markdown files follow the rules in `.markdownlint-cli2.jsonc` |
+| Link check | Relative links point at files that actually exist |
+
+Run the same checks locally before pushing. CI is a safety net, not a test loop —
+waiting on a runner to learn you have a lint error is a slow way to work.
+
+```bash
+npx --yes markdownlint-cli2 "**/*.md"
+```
+
+When a check fails, open the failing job in the pull request's **Checks** tab and
+read the step's log. Reproduce it locally, fix it, and push again; the run restarts
+automatically.
+
 ## Branch naming
 
 Use a `type/short-description` shape:
@@ -71,7 +96,7 @@ the sentence "this commit will...". Then a blank line, then the *why* if it is n
 obvious from the diff. The diff already shows what changed; it cannot explain the
 reasoning.
 
-```
+```text
 Reject empty cart at checkout
 
 Empty carts reached the payment provider and failed with an opaque

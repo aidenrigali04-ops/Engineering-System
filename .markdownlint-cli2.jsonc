@@ -1,0 +1,13 @@
+{
+  // Rules that differ from markdownlint defaults.
+  "config": {
+    // Hard-wrapping prose at a fixed column is a formatting preference, and
+    // table rows cannot be wrapped at all without breaking the table.
+    "MD013": false,
+
+    // Allow repeated headings under different parents, e.g. a "Why" section
+    // beneath several different features.
+    "MD024": { "siblings_only": true }
+  },
+  "ignores": ["node_modules/**"]
+}
