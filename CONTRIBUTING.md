@@ -63,17 +63,30 @@ git branch -d docs/contributing-workflow
 Every pull request runs the checks in `.github/workflows/ci.yml`. They must pass
 before the pull request can merge.
 
-| Check | What it verifies |
+| Job | What it verifies |
 | --- | --- |
-| Markdown lint | Markdown files follow the rules in `.markdownlint-cli2.jsonc` |
+| Test | The test suite passes under the Node version in `.nvmrc` |
+| Lint and format | JavaScript lints, markdown lints, formatting is unchanged |
 | Link check | Relative links point at files that actually exist |
+| Branch name | The pull request's branch follows the convention below |
 
 Run the same checks locally before pushing. CI is a safety net, not a test loop —
 waiting on a runner to learn you have a lint error is a slow way to work.
 
 ```bash
-npx --yes markdownlint-cli2 "**/*.md"
+npm ci          # once, or after the lockfile changes
+npm run check   # everything CI runs
 ```
+
+Formatting failures do not need to be fixed by hand:
+
+```bash
+npm run format
+```
+
+Tooling versions are pinned exactly in `package.json` and locked in
+`package-lock.json`. CI installs with `npm ci`, which fails if the lockfile and
+manifest disagree, so CI and your machine run identical tool versions.
 
 When a check fails, open the failing job in the pull request's **Checks** tab and
 read the step's log. Reproduce it locally, fix it, and push again; the run restarts
@@ -81,13 +94,26 @@ automatically.
 
 ## Branch naming
 
-Use a `type/short-description` shape:
+Use a `type/short-description` shape. This is enforced by the "Branch name" job,
+which runs `src/branch-name.js` against the pull request's branch.
 
 - `feat/user-login`
 - `fix/null-check-on-empty-cart`
 - `docs/contributing-workflow`
 - `refactor/extract-http-client`
 - `chore/bump-dependencies`
+- `test/cover-empty-cart-path`
+- `ci/cache-npm-downloads`
+
+The type must be one of `chore`, `ci`, `docs`, `feat`, `fix`, `refactor`, or
+`test`. The description must be lowercase words joined by single hyphens, and the
+whole name must be 60 characters or fewer.
+
+Check a name before you push:
+
+```bash
+node scripts/check-branch-name.js "$(git branch --show-current)"
+```
 
 ## Commit messages
 

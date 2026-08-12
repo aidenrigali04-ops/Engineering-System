@@ -1,0 +1,27 @@
+{
+  "name": "engineering-system",
+  "version": "0.1.0",
+  "description": "A learning playground for professional software engineering tooling",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:watch": "node --test --watch",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "lint": "eslint . --max-warnings 0",
+    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run lint && npm run lint:md && npm run format:check && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.8.1",
+    "markdownlint-cli2": "0.22.1",
+    "prettier": "3.9.6"
+  }
+}

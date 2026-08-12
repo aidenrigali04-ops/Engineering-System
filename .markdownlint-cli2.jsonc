@@ -7,7 +7,7 @@
 
     // Allow repeated headings under different parents, e.g. a "Why" section
     // beneath several different features.
-    "MD024": { "siblings_only": true }
+    "MD024": { "siblings_only": true },
   },
-  "ignores": ["node_modules/**"]
+  "ignores": ["node_modules/**"],
 }

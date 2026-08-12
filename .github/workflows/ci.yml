@@ -20,8 +20,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  markdown:
-    name: Markdown lint
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
@@ -30,12 +30,44 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
+          cache: npm
 
-      # A step is just a shell command. Running the same command locally is
-      # what keeps CI from becoming the place you discover problems.
+      # npm ci installs exactly what package-lock.json specifies and fails if
+      # the lockfile disagrees with package.json. npm install would silently
+      # resolve new versions, which is how CI and local machines drift apart.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Kept as separate steps so a failure names the tool that failed rather
+      # than reporting one opaque red job.
+      - name: Lint JavaScript
+        run: npm run lint
+
       - name: Lint markdown
-        run: npx --yes markdownlint-cli2 "**/*.md"
+        run: npm run lint:md
+
+      - name: Check formatting
+        run: npm run format:check
 
   links:
     name: Link check
@@ -52,3 +84,26 @@ jobs:
         with:
           args: --offline --no-progress --verbose "**/*.md"
           fail: true
+
+  branch-name:
+    name: Branch name
+    # Only meaningful for a pull request, where a source branch exists.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # The branch name is passed through the environment rather than
+      # interpolated into the command. A branch name is attacker-controlled
+      # text, and ${{ }} substitution happens before the shell sees the line,
+      # so interpolating it directly would let a crafted name run commands.
+      - name: Validate branch name
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: node scripts/check-branch-name.js "$BRANCH_NAME"
