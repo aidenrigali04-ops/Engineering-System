@@ -92,7 +92,7 @@ before the pull request can merge.
 | Job | What it verifies |
 | --- | --- |
 | Test | The test suite passes under the Node version in `.nvmrc` |
-| Lint and format | JavaScript lints, markdown lints, formatting is unchanged |
+| Lint and format | Types check, code lints, markdown lints, formatting is unchanged |
 | Link check | Relative links point at files that actually exist |
 | Branch name | The pull request's branch follows the convention below |
 
@@ -121,7 +121,7 @@ automatically.
 ## Branch naming
 
 Use a `type/short-description` shape. This is enforced by the "Branch name" job,
-which runs `src/branch-name.js` against the pull request's branch.
+which runs `src/branch-name.ts` against the pull request's branch.
 
 - `feat/user-login`
 - `fix/null-check-on-empty-cart`
@@ -138,7 +138,7 @@ whole name must be 60 characters or fewer.
 Check a name before you push:
 
 ```bash
-node scripts/check-branch-name.js "$(git branch --show-current)"
+node scripts/check-branch-name.ts "$(git branch --show-current)"
 ```
 
 ## Commit messages

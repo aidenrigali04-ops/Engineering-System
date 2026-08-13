@@ -5,3 +5,4 @@ package-lock.json
 # Markdown is owned by markdownlint. Two tools formatting the same files
 # disagree eventually, and the resulting fights are never worth it.
 *.md
+dist

@@ -7,29 +7,51 @@
 
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 
-import { createApp } from "../src/app.js";
+import { createApp } from "../src/app.ts";
+import type { TrackedRepository } from "../src/repositories.ts";
 
 /**
  * Port 0 asks the operating system for any free port. Hardcoding one makes
  * tests fail whenever something else happens to be using it, and makes two
  * test files unable to run at the same time.
  */
-function listenOnEphemeralPort(server) {
+function listenOnEphemeralPort(server: Server): Promise<string> {
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
-      resolve(`http://127.0.0.1:${server.address().port}`);
+      const { port } = server.address() as AddressInfo;
+      resolve(`http://127.0.0.1:${port}`);
     });
   });
 }
 
-function close(server) {
-  return new Promise((resolve) => server.close(resolve));
+function close(server: Server): Promise<void> {
+  return new Promise((resolve) => {
+    server.close(() => {
+      resolve();
+    });
+  });
+}
+
+/**
+ * `Response.json()` is typed as `any`, which would quietly disable type
+ * checking for every assertion made against a response body. Naming the
+ * expected shape here keeps that from spreading through the file.
+ */
+async function readJson<T>(response: Response): Promise<T> {
+  return (await response.json()) as T;
+}
+
+interface ErrorBody {
+  error: string;
+  details?: string[];
 }
 
 describe("HTTP API", () => {
-  let server;
-  let baseUrl;
+  let server: Server;
+  let baseUrl: string;
 
   before(async () => {
     server = createApp();
@@ -48,12 +70,15 @@ describe("HTTP API", () => {
 
     it("responds with JSON", async () => {
       const response = await fetch(`${baseUrl}/health`);
-      assert.match(response.headers.get("content-type"), /^application\/json/);
+      const contentType = response.headers.get("content-type");
+
+      assert.ok(contentType, "should set a content-type");
+      assert.match(contentType, /^application\/json/);
     });
 
     it("reports an ok status and a numeric uptime", async () => {
       const response = await fetch(`${baseUrl}/health`);
-      const body = await response.json();
+      const body = await readJson<{ status: string; uptime: number }>(response);
 
       assert.equal(body.status, "ok");
       assert.equal(typeof body.uptime, "number");
@@ -74,7 +99,7 @@ describe("HTTP API", () => {
 
     it("respond 404 with the documented error shape", async () => {
       const response = await fetch(`${baseUrl}/does-not-exist`);
-      const body = await response.json();
+      const body = await readJson<ErrorBody>(response);
 
       assert.deepEqual(body, { error: "not_found" });
     });
@@ -98,8 +123,8 @@ describe("HTTP API", () => {
 });
 
 describe("repositories API", () => {
-  let server;
-  let baseUrl;
+  let server: Server;
+  let baseUrl: string;
 
   before(async () => {
     server = createApp();
@@ -114,7 +139,7 @@ describe("repositories API", () => {
   let counter = 0;
   const uniqueInput = () => ({ owner: "octocat", name: `repo-${++counter}` });
 
-  function post(body) {
+  function post(body: unknown): Promise<Response> {
     return fetch(`${baseUrl}/repositories`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -122,11 +147,24 @@ describe("repositories API", () => {
     });
   }
 
+  /** Creates a repository and returns it, failing the test if that did not work. */
+  async function create(): Promise<TrackedRepository> {
+    const response = await post(uniqueInput());
+    assert.equal(response.status, 201);
+    return readJson<TrackedRepository>(response);
+  }
+
+  function list(): Promise<{ data: TrackedRepository[] }> {
+    return fetch(`${baseUrl}/repositories`).then((response) =>
+      readJson<{ data: TrackedRepository[] }>(response),
+    );
+  }
+
   describe("creating", () => {
     it("responds 201 with the created repository", async () => {
       const input = uniqueInput();
       const response = await post(input);
-      const body = await response.json();
+      const body = await readJson<TrackedRepository>(response);
 
       assert.equal(response.status, 201);
       assert.equal(body.owner, input.owner);
@@ -137,7 +175,7 @@ describe("repositories API", () => {
 
     it("points at the new repository with a Location header", async () => {
       const response = await post(uniqueInput());
-      const body = await response.json();
+      const body = await readJson<TrackedRepository>(response);
 
       assert.equal(
         response.headers.get("location"),
@@ -146,16 +184,16 @@ describe("repositories API", () => {
     });
 
     it("makes the repository fetchable at that location", async () => {
-      const created = await (await post(uniqueInput())).json();
+      const created = await create();
       const response = await fetch(`${baseUrl}/repositories/${created.id}`);
 
       assert.equal(response.status, 200);
-      assert.deepEqual(await response.json(), created);
+      assert.deepEqual(await readJson<TrackedRepository>(response), created);
     });
 
     it("includes it in the list", async () => {
-      const created = await (await post(uniqueInput())).json();
-      const { data } = await (await fetch(`${baseUrl}/repositories`)).json();
+      const created = await create();
+      const { data } = await list();
 
       assert.ok(data.some((row) => row.id === created.id));
     });
@@ -164,19 +202,19 @@ describe("repositories API", () => {
   describe("rejecting bad input", () => {
     it("responds 400 with details when a field is missing", async () => {
       const response = await post({ owner: "octocat" });
-      const body = await response.json();
+      const body = await readJson<ErrorBody>(response);
 
       assert.equal(response.status, 400);
       assert.equal(body.error, "invalid");
-      assert.ok(body.details.length > 0, "should say what was wrong");
+      assert.ok(body.details?.length, "should say what was wrong");
     });
 
     it("responds 400 for a malformed JSON body", async () => {
       const response = await post("{not json");
-      const body = await response.json();
+      const body = await readJson<ErrorBody>(response);
 
       assert.equal(response.status, 400);
-      assert.match(body.details[0], /not valid JSON/);
+      assert.match(body.details?.[0] ?? "", /not valid JSON/);
     });
 
     it("responds 400 for an empty body", async () => {
@@ -204,14 +242,14 @@ describe("repositories API", () => {
       const response = await post(input);
 
       assert.equal(response.status, 409);
-      assert.equal((await response.json()).error, "conflict");
+      assert.equal((await readJson<ErrorBody>(response)).error, "conflict");
     });
   });
 
   describe("fetching one", () => {
     it("responds 404 for an id that does not exist", async () => {
       const response = await fetch(`${baseUrl}/repositories/nope`);
-      const body = await response.json();
+      const body = await readJson<ErrorBody>(response);
 
       assert.equal(response.status, 404);
       assert.equal(body.error, "not_found");
@@ -220,7 +258,7 @@ describe("repositories API", () => {
 
   describe("deleting", () => {
     it("responds 204 with no body", async () => {
-      const created = await (await post(uniqueInput())).json();
+      const created = await create();
       const response = await fetch(`${baseUrl}/repositories/${created.id}`, {
         method: "DELETE",
       });
@@ -230,7 +268,7 @@ describe("repositories API", () => {
     });
 
     it("actually removes it", async () => {
-      const created = await (await post(uniqueInput())).json();
+      const created = await create();
       await fetch(`${baseUrl}/repositories/${created.id}`, {
         method: "DELETE",
       });
@@ -240,7 +278,7 @@ describe("repositories API", () => {
     });
 
     it("responds 404 when deleting something already gone", async () => {
-      const created = await (await post(uniqueInput())).json();
+      const created = await create();
       const url = `${baseUrl}/repositories/${created.id}`;
 
       assert.equal((await fetch(url, { method: "DELETE" })).status, 204);
@@ -255,7 +293,10 @@ describe("repositories API", () => {
 
       try {
         await post(uniqueInput());
-        const { data } = await (await fetch(`${otherUrl}/repositories`)).json();
+        const otherResponse = await fetch(`${otherUrl}/repositories`);
+        const { data } = await readJson<{ data: TrackedRepository[] }>(
+          otherResponse,
+        );
 
         assert.deepEqual(data, [], "a second app should start empty");
       } finally {

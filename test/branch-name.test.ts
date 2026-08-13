@@ -5,7 +5,7 @@ import {
   ALLOWED_TYPES,
   MAX_LENGTH,
   validateBranchName,
-} from "../src/branch-name.js";
+} from "../src/branch-name.ts";
 
 describe("validateBranchName", () => {
   describe("accepts", () => {
@@ -36,6 +36,7 @@ describe("validateBranchName", () => {
     it("an empty string", () => {
       const result = validateBranchName("");
       assert.equal(result.valid, false);
+      assert.ok(result.reason);
       assert.match(result.reason, /required/);
     });
 
@@ -52,6 +53,7 @@ describe("validateBranchName", () => {
     it("a name with no slash", () => {
       const result = validateBranchName("just-a-description");
       assert.equal(result.valid, false);
+      assert.ok(result.reason);
       assert.match(result.reason, /exactly one slash/);
     });
 
@@ -62,6 +64,7 @@ describe("validateBranchName", () => {
     it("an unknown type", () => {
       const result = validateBranchName("wip/some-description");
       assert.equal(result.valid, false);
+      assert.ok(result.reason);
       assert.match(result.reason, /not a known type/);
     });
 
@@ -72,6 +75,7 @@ describe("validateBranchName", () => {
     it("an uppercase description", () => {
       const result = validateBranchName("feat/Some-Description");
       assert.equal(result.valid, false);
+      assert.ok(result.reason);
       assert.match(result.reason, /lowercase/);
     });
 
@@ -96,6 +100,7 @@ describe("validateBranchName", () => {
       const name = `feat/${"a".repeat(MAX_LENGTH - "feat/".length + 1)}`;
       const result = validateBranchName(name);
       assert.equal(result.valid, false);
+      assert.ok(result.reason);
       assert.match(result.reason, /characters or fewer/);
     });
   });

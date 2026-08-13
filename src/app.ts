@@ -9,10 +9,20 @@
  * tests can start it on an ephemeral port and shut it down cleanly.
  */
 
-import { createServer } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
+import type { Server } from "node:http";
 
-import { createRepositories } from "./repositories.js";
-import { createStore } from "./store.js";
+import {
+  createRepositories,
+  type FailureCode,
+  type Repositories,
+  type TrackedRepository,
+} from "./repositories.ts";
+import { createStore, type Store } from "./store.ts";
 
 /**
  * Bodies are capped because an unbounded read is a denial-of-service waiting
@@ -22,13 +32,35 @@ import { createStore } from "./store.js";
 const MAX_BODY_BYTES = 16 * 1024;
 
 /** Domain failures carry a code; HTTP is where that becomes a status number. */
-const STATUS_BY_CODE = Object.freeze({
+const STATUS_BY_CODE: Record<FailureCode, number> = {
   invalid: 400,
   not_found: 404,
   conflict: 409,
-});
+};
 
-function sendJson(res, statusCode, body) {
+type RouteParams = Record<string, string>;
+
+type Handler = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: RouteParams,
+) => void | Promise<void>;
+
+interface Route {
+  method: string;
+  segments: string[];
+  handler: Handler;
+}
+
+type BodyResult =
+  | { ok: true; value: unknown }
+  | { ok: false; code: "too_large" | "empty" | "malformed" };
+
+function sendJson(
+  res: ServerResponse,
+  statusCode: number,
+  body: unknown,
+): void {
   const payload = JSON.stringify(body);
   res.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
@@ -37,16 +69,17 @@ function sendJson(res, statusCode, body) {
   res.end(payload);
 }
 
-function sendNoContent(res) {
+function sendNoContent(res: ServerResponse): void {
   res.writeHead(204);
   res.end();
 }
 
-function sendFailure(res, result) {
-  sendJson(res, STATUS_BY_CODE[result.code] ?? 500, {
-    error: result.code,
-    details: result.details,
-  });
+function sendFailure(
+  res: ServerResponse,
+  code: FailureCode,
+  details: string[],
+): void {
+  sendJson(res, STATUS_BY_CODE[code], { error: code, details });
 }
 
 /**
@@ -56,16 +89,17 @@ function sendFailure(res, result) {
  * exceptional — they are all things a client will do, and each needs a
  * different status code.
  */
-async function readJsonBody(req) {
-  const chunks = [];
+async function readJsonBody(req: IncomingMessage): Promise<BodyResult> {
+  const chunks: Buffer[] = [];
   let size = 0;
 
   for await (const chunk of req) {
-    size += chunk.length;
+    const buffer = chunk as Buffer;
+    size += buffer.length;
     if (size > MAX_BODY_BYTES) {
       return { ok: false, code: "too_large" };
     }
-    chunks.push(chunk);
+    chunks.push(buffer);
   }
 
   const raw = Buffer.concat(chunks).toString("utf8");
@@ -87,19 +121,22 @@ async function readJsonBody(req) {
  * caller's reaction would actually fix — restarting this process cannot repair
  * someone else's outage, so third-party checks do not belong here.
  */
-function handleHealth(_req, res) {
+function handleHealth(_req: IncomingMessage, res: ServerResponse): void {
   sendJson(res, 200, {
     status: "ok",
     uptime: Math.floor(process.uptime()),
   });
 }
 
-function handleNotFound(_req, res) {
+function handleNotFound(_req: IncomingMessage, res: ServerResponse): void {
   sendJson(res, 404, { error: "not_found" });
 }
 
-function buildRoutes(repositories) {
-  async function handleCreate(req, res) {
+function buildRoutes(repositories: Repositories): Route[] {
+  async function handleCreate(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
     const body = await readJsonBody(req);
 
     if (!body.ok) {
@@ -124,7 +161,7 @@ function buildRoutes(repositories) {
 
     const result = await repositories.create(body.value);
     if (!result.ok) {
-      sendFailure(res, result);
+      sendFailure(res, result.code, result.details);
       return;
     }
 
@@ -134,27 +171,42 @@ function buildRoutes(repositories) {
     sendJson(res, 201, result.value);
   }
 
-  async function handleList(_req, res) {
+  async function handleList(
+    _req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
     const result = await repositories.list();
+    if (!result.ok) {
+      sendFailure(res, result.code, result.details);
+      return;
+    }
 
     // Wrapped rather than returned as a bare array so pagination can be added
     // beside the data later without changing the shape clients already parse.
     sendJson(res, 200, { data: result.value });
   }
 
-  async function handleGet(_req, res, params) {
-    const result = await repositories.get(params.id);
+  async function handleGet(
+    _req: IncomingMessage,
+    res: ServerResponse,
+    params: RouteParams,
+  ): Promise<void> {
+    const result = await repositories.get(params.id ?? "");
     if (!result.ok) {
-      sendFailure(res, result);
+      sendFailure(res, result.code, result.details);
       return;
     }
     sendJson(res, 200, result.value);
   }
 
-  async function handleDelete(_req, res, params) {
-    const result = await repositories.remove(params.id);
+  async function handleDelete(
+    _req: IncomingMessage,
+    res: ServerResponse,
+    params: RouteParams,
+  ): Promise<void> {
+    const result = await repositories.remove(params.id ?? "");
     if (!result.ok) {
-      sendFailure(res, result);
+      sendFailure(res, result.code, result.details);
       return;
     }
 
@@ -168,9 +220,10 @@ function buildRoutes(repositories) {
     { method: "GET", path: "/repositories", handler: handleList },
     { method: "GET", path: "/repositories/:id", handler: handleGet },
     { method: "DELETE", path: "/repositories/:id", handler: handleDelete },
-  ].map((route) => ({
-    ...route,
-    segments: route.path.split("/").filter(Boolean),
+  ].map(({ method, path, handler }) => ({
+    method,
+    handler,
+    segments: path.split("/").filter(Boolean),
   }));
 }
 
@@ -182,7 +235,11 @@ function buildRoutes(repositories) {
  * framework instead of growing this function — that is the trade a framework
  * actually buys you.
  */
-function matchRoute(routes, method, pathname) {
+function matchRoute(
+  routes: Route[],
+  method: string,
+  pathname: string,
+): { handler: Handler; params: RouteParams } | null {
   const segments = pathname.split("/").filter(Boolean);
 
   for (const route of routes) {
@@ -190,13 +247,14 @@ function matchRoute(routes, method, pathname) {
       continue;
     }
 
-    const params = {};
+    const params: RouteParams = {};
     const matched = route.segments.every((expected, index) => {
+      const actual = segments[index] ?? "";
       if (expected.startsWith(":")) {
-        params[expected.slice(1)] = decodeURIComponent(segments[index]);
+        params[expected.slice(1)] = decodeURIComponent(actual);
         return true;
       }
-      return expected === segments[index];
+      return expected === actual;
     });
 
     if (matched) {
@@ -207,18 +265,21 @@ function matchRoute(routes, method, pathname) {
   return null;
 }
 
-/**
- * @param {{ store?: object }} dependencies - injected so tests can supply
- *   isolated storage rather than sharing one global instance.
- */
-export function createApp({ store = createStore() } = {}) {
-  const routes = buildRoutes(createRepositories(store));
+export interface AppDependencies {
+  /** Injected so tests can supply isolated storage per app instance. */
+  store?: Store<TrackedRepository>;
+}
+
+export function createApp({ store }: AppDependencies = {}): Server {
+  const routes = buildRoutes(
+    createRepositories(store ?? createStore<TrackedRepository>()),
+  );
 
   return createServer((req, res) => {
     // The URL is parsed rather than compared directly so that a query string
     // does not turn /health into an unknown route.
     const { pathname } = new URL(req.url ?? "/", "http://localhost");
-    const match = matchRoute(routes, req.method, pathname);
+    const match = matchRoute(routes, req.method ?? "", pathname);
 
     if (match === null) {
       handleNotFound(req, res);
@@ -227,16 +288,18 @@ export function createApp({ store = createStore() } = {}) {
 
     // Handlers are async, and a rejected promise here would otherwise leave
     // the client waiting until it timed out rather than telling it anything.
-    Promise.resolve(match.handler(req, res, match.params)).catch((error) => {
-      // A 500 nobody can see is a bug that never gets fixed. This is the
-      // stand-in until the structured logger in #9 replaces it.
-      // eslint-disable-next-line no-console
-      console.error(error);
+    Promise.resolve(match.handler(req, res, match.params)).catch(
+      (error: unknown) => {
+        // A 500 nobody can see is a bug that never gets fixed. This is the
+        // stand-in until the structured logger in #9 replaces it.
+        // eslint-disable-next-line no-console
+        console.error(error);
 
-      if (!res.headersSent) {
-        sendJson(res, 500, { error: "internal_error" });
-      }
-      res.end();
-    });
+        if (!res.headersSent) {
+          sendJson(res, 500, { error: "internal_error" });
+        }
+        res.end();
+      },
+    );
   });
 }
