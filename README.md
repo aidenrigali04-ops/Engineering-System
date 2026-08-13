@@ -9,9 +9,9 @@ Features exist only as excuses to exercise the tooling.
 
 ## Status
 
-Bootstrapping. `main` is protected, changes land through pull requests, and CI
-runs tests, linting, and formatting on every one. The only source code so far is
-a small module that enforces this repository's own branch naming convention.
+`main` is protected, changes land through pull requests, and CI runs tests,
+linting, and formatting on every one. The service currently exposes a single
+health endpoint.
 
 ## Repository layout
 
@@ -27,7 +27,9 @@ a small module that enforces this repository's own branch naming convention.
 ├── eslint.config.js            JavaScript lint rules
 ├── package.json                Scripts and pinned tooling
 ├── scripts/                    Command line entry points used by CI
-├── src/                        Source code
+├── src/app.js                  Routing and request handlers
+├── src/config.js               Configuration read from the environment
+├── src/server.js               Entry point: listens and shuts down cleanly
 ├── test/                       Tests, mirroring src/
 ├── CONTRIBUTING.md             Branch protection rules and the git workflow
 └── README.md                   This file
@@ -45,10 +47,52 @@ npm ci           # install exactly what the lockfile specifies
 npm run check    # run everything CI runs
 ```
 
+## Running the service
+
+```bash
+npm start              # listens on port 3000
+PORT=8080 npm start    # or any port you choose
+npm run dev            # restarts automatically when files change
+```
+
+The server refuses to start if `PORT` is set to something that is not a valid
+port number, rather than falling back to the default and listening somewhere
+you did not ask for.
+
+## API
+
+### `GET /health`
+
+Reports whether the process is able to serve requests. This is what a load
+balancer, orchestrator, or deployment system polls to decide whether to send
+traffic to this instance.
+
+```bash
+curl http://localhost:3000/health
+```
+
+```json
+{ "status": "ok", "uptime": 42 }
+```
+
+The check is deliberately shallow. It should only fail for conditions that the
+caller's reaction would actually fix — restarting this process cannot repair a
+third party's outage, so external dependencies are not checked here.
+
+Any other route returns 404 with `{ "error": "not_found" }`.
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `3000` | Port to listen on. `0` asks the OS for a free port. |
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
+| `npm start` | Start the service |
+| `npm run dev` | Start with automatic restart on file changes |
 | `npm test` | Run the test suite |
 | `npm run test:watch` | Re-run tests as files change |
 | `npm run test:coverage` | Run tests with a coverage report |
