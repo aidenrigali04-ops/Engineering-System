@@ -102,6 +102,19 @@ Any other route returns 404 with `{ "error": "not_found" }`.
 | `npm run format:check` | Fail if anything is unformatted |
 | `npm run check` | Everything above, in the order CI runs it |
 
+## Tests
+
+Tests live in `test/`, mirroring `src/`, and run in two layers:
+
+| Layer | Example | What it catches |
+| --- | --- | --- |
+| Unit | `test/config.test.js` | Logic errors inside one function |
+| Integration | `test/app.test.js` | Wiring: routing, status codes, response bodies |
+
+The integration tests start the real server on an ephemeral port and make real
+HTTP requests against it. Nothing is stubbed, so they fail if the pieces stop
+fitting together — which unit tests, by definition, cannot detect.
+
 ## Workflow
 
 Work happens on short-lived branches and lands on `main` through a pull request.
