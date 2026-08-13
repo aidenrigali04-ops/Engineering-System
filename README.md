@@ -27,9 +27,11 @@ health endpoint.
 ├── eslint.config.js            JavaScript lint rules
 ├── package.json                Scripts and pinned tooling
 ├── scripts/                    Command line entry points used by CI
-├── src/app.js                  Routing and request handlers
+├── src/app.js                  Routing, request parsing, status codes
 ├── src/config.js               Configuration read from the environment
+├── src/repositories.js         Tracked repositories: validation and rules
 ├── src/server.js               Entry point: listens and shuts down cleanly
+├── src/store.js                Storage, behind a swappable interface
 ├── test/                       Tests, mirroring src/
 ├── CONTRIBUTING.md             Branch protection rules and the git workflow
 └── README.md                   This file
@@ -78,6 +80,46 @@ curl http://localhost:3000/health
 The check is deliberately shallow. It should only fail for conditions that the
 caller's reaction would actually fix — restarting this process cannot repair a
 third party's outage, so external dependencies are not checked here.
+
+### Tracked repositories
+
+A tracked repository is one this service watches. Storage is currently
+in-memory, so everything is lost when the process restarts.
+
+| Method | Path | Result |
+| --- | --- | --- |
+| `POST` | `/repositories` | `201` with the created repository and a `Location` header |
+| `GET` | `/repositories` | `200` with `{ "data": [...] }`, newest first |
+| `GET` | `/repositories/:id` | `200`, or `404` if there is no such id |
+| `DELETE` | `/repositories/:id` | `204`, or `404` if there is no such id |
+
+```bash
+curl -X POST http://localhost:3000/repositories \
+  -H 'content-type: application/json' \
+  -d '{"owner":"aidenrigali04-ops","name":"Engineering-System"}'
+```
+
+```json
+{
+  "id": "6f1e...",
+  "owner": "aidenrigali04-ops",
+  "name": "Engineering-System",
+  "fullName": "aidenrigali04-ops/Engineering-System",
+  "trackedAt": "2026-08-13T01:24:00.000Z"
+}
+```
+
+`owner` and `name` are the only accepted fields, and both are required.
+Anything else in the body is rejected rather than ignored, so a misspelled
+field fails loudly instead of quietly doing nothing.
+
+| Status | When |
+| --- | --- |
+| `400` | The body is missing, unparseable, or fails validation |
+| `409` | That `owner/name` is already tracked, ignoring case |
+| `413` | The body is larger than 16 KB |
+
+Failures carry the reason: `{ "error": "invalid", "details": ["..."] }`.
 
 Any other route returns 404 with `{ "error": "not_found" }`.
 

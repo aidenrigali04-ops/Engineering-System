@@ -97,6 +97,174 @@ describe("HTTP API", () => {
   });
 });
 
+describe("repositories API", () => {
+  let server;
+  let baseUrl;
+
+  before(async () => {
+    server = createApp();
+    baseUrl = await listenOnEphemeralPort(server);
+  });
+
+  after(() => close(server));
+
+  // State persists across tests within one server, so each test works on a
+  // name no other test uses. Tests that depend on each other's leftovers pass
+  // in order and fail the moment anything is reordered or run alone.
+  let counter = 0;
+  const uniqueInput = () => ({ owner: "octocat", name: `repo-${++counter}` });
+
+  function post(body) {
+    return fetch(`${baseUrl}/repositories`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+  }
+
+  describe("creating", () => {
+    it("responds 201 with the created repository", async () => {
+      const input = uniqueInput();
+      const response = await post(input);
+      const body = await response.json();
+
+      assert.equal(response.status, 201);
+      assert.equal(body.owner, input.owner);
+      assert.equal(body.name, input.name);
+      assert.equal(body.fullName, `${input.owner}/${input.name}`);
+      assert.ok(body.id, "should assign an id");
+    });
+
+    it("points at the new repository with a Location header", async () => {
+      const response = await post(uniqueInput());
+      const body = await response.json();
+
+      assert.equal(
+        response.headers.get("location"),
+        `/repositories/${body.id}`,
+      );
+    });
+
+    it("makes the repository fetchable at that location", async () => {
+      const created = await (await post(uniqueInput())).json();
+      const response = await fetch(`${baseUrl}/repositories/${created.id}`);
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), created);
+    });
+
+    it("includes it in the list", async () => {
+      const created = await (await post(uniqueInput())).json();
+      const { data } = await (await fetch(`${baseUrl}/repositories`)).json();
+
+      assert.ok(data.some((row) => row.id === created.id));
+    });
+  });
+
+  describe("rejecting bad input", () => {
+    it("responds 400 with details when a field is missing", async () => {
+      const response = await post({ owner: "octocat" });
+      const body = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.equal(body.error, "invalid");
+      assert.ok(body.details.length > 0, "should say what was wrong");
+    });
+
+    it("responds 400 for a malformed JSON body", async () => {
+      const response = await post("{not json");
+      const body = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.match(body.details[0], /not valid JSON/);
+    });
+
+    it("responds 400 for an empty body", async () => {
+      const response = await post("");
+      assert.equal(response.status, 400);
+    });
+
+    it("responds 400 for a JSON value that is not an object", async () => {
+      const response = await post('"just a string"');
+      assert.equal(response.status, 400);
+    });
+
+    it("responds 413 rather than reading an oversized body", async () => {
+      const response = await post({
+        owner: "octocat",
+        name: "x".repeat(32 * 1024),
+      });
+
+      assert.equal(response.status, 413);
+    });
+
+    it("responds 409 when the repository is already tracked", async () => {
+      const input = uniqueInput();
+      await post(input);
+      const response = await post(input);
+
+      assert.equal(response.status, 409);
+      assert.equal((await response.json()).error, "conflict");
+    });
+  });
+
+  describe("fetching one", () => {
+    it("responds 404 for an id that does not exist", async () => {
+      const response = await fetch(`${baseUrl}/repositories/nope`);
+      const body = await response.json();
+
+      assert.equal(response.status, 404);
+      assert.equal(body.error, "not_found");
+    });
+  });
+
+  describe("deleting", () => {
+    it("responds 204 with no body", async () => {
+      const created = await (await post(uniqueInput())).json();
+      const response = await fetch(`${baseUrl}/repositories/${created.id}`, {
+        method: "DELETE",
+      });
+
+      assert.equal(response.status, 204);
+      assert.equal(await response.text(), "");
+    });
+
+    it("actually removes it", async () => {
+      const created = await (await post(uniqueInput())).json();
+      await fetch(`${baseUrl}/repositories/${created.id}`, {
+        method: "DELETE",
+      });
+
+      const response = await fetch(`${baseUrl}/repositories/${created.id}`);
+      assert.equal(response.status, 404);
+    });
+
+    it("responds 404 when deleting something already gone", async () => {
+      const created = await (await post(uniqueInput())).json();
+      const url = `${baseUrl}/repositories/${created.id}`;
+
+      assert.equal((await fetch(url, { method: "DELETE" })).status, 204);
+      assert.equal((await fetch(url, { method: "DELETE" })).status, 404);
+    });
+  });
+
+  describe("isolation between app instances", () => {
+    it("does not share storage with another app", async () => {
+      const other = createApp();
+      const otherUrl = await listenOnEphemeralPort(other);
+
+      try {
+        await post(uniqueInput());
+        const { data } = await (await fetch(`${otherUrl}/repositories`)).json();
+
+        assert.deepEqual(data, [], "a second app should start empty");
+      } finally {
+        await close(other);
+      }
+    });
+  });
+});
+
 describe("server lifecycle", () => {
   it("releases its port when closed", async () => {
     const server = createApp();
