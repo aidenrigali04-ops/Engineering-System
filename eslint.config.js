@@ -27,15 +27,22 @@ export default [
   },
 
   {
-    // Command line entry points are supposed to talk to the terminal and read
-    // their arguments from the process.
-    files: ["scripts/**/*.js"],
+    // Code that runs on Node rather than in a browser, so Node's globals exist.
+    files: ["src/**/*.js", "scripts/**/*.js", "test/**/*.js"],
     languageOptions: {
       globals: {
+        Buffer: "readonly",
+        URL: "readonly",
         console: "readonly",
         process: "readonly",
       },
     },
+  },
+
+  {
+    // Entry points are supposed to talk to the terminal. Everything else
+    // should hand information back to its caller instead of printing it.
+    files: ["scripts/**/*.js", "src/server.js"],
     rules: {
       "no-console": "off",
     },
