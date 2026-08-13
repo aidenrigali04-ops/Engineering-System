@@ -3,7 +3,7 @@
  * `type/short-description`, for example `fix/null-check-on-empty-cart`.
  */
 
-export const ALLOWED_TYPES = Object.freeze([
+export const ALLOWED_TYPES = [
   "chore",
   "ci",
   "docs",
@@ -11,7 +11,9 @@ export const ALLOWED_TYPES = Object.freeze([
   "fix",
   "refactor",
   "test",
-]);
+] as const;
+
+export type BranchType = (typeof ALLOWED_TYPES)[number];
 
 export const MAX_LENGTH = 60;
 
@@ -19,15 +21,16 @@ export const MAX_LENGTH = 60;
 // trailing hyphens, doubled hyphens, underscores, and uppercase.
 const DESCRIPTION_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-function invalid(reason) {
+export interface ValidationResult {
+  valid: boolean;
+  reason: string | null;
+}
+
+function invalid(reason: string): ValidationResult {
   return { valid: false, reason };
 }
 
-/**
- * @param {unknown} name
- * @returns {{ valid: boolean, reason: string | null }}
- */
-export function validateBranchName(name) {
+export function validateBranchName(name: unknown): ValidationResult {
   if (typeof name !== "string" || name.trim() === "") {
     return invalid("A branch name is required.");
   }
@@ -38,16 +41,18 @@ export function validateBranchName(name) {
     );
   }
 
-  const separators = name.split("/").length - 1;
-  if (separators !== 1) {
+  const parts = name.split("/");
+  if (parts.length !== 2) {
     return invalid(
       'A branch name must look like "type/short-description", with exactly one slash.',
     );
   }
 
-  const [type, description] = name.split("/");
+  // Indexing is checked, so these are string | undefined until narrowed. The
+  // length check above already guarantees both exist.
+  const [type = "", description = ""] = parts;
 
-  if (!ALLOWED_TYPES.includes(type)) {
+  if (!ALLOWED_TYPES.includes(type as BranchType)) {
     return invalid(
       `"${type}" is not a known type. Use one of: ${ALLOWED_TYPES.join(", ")}.`,
     );

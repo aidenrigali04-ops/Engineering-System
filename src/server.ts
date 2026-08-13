@@ -4,27 +4,29 @@
  * Run with `npm start`.
  */
 
-import { createApp } from "./app.js";
-import { resolvePort } from "./config.js";
+import type { AddressInfo } from "node:net";
 
-let port;
+import { createApp } from "./app.ts";
+import { resolvePort } from "./config.ts";
+
+let port: number;
 try {
   port = resolvePort(process.env);
 } catch (error) {
   // Fail immediately and loudly on bad configuration. A server that silently
   // falls back to a default port is worse than one that refuses to start.
-  console.error(error.message);
+  console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 }
 
 const server = createApp();
 
 server.listen(port, () => {
-  const address = server.address();
+  const address = server.address() as AddressInfo;
   console.log(`Listening on http://localhost:${address.port}`);
 });
 
-server.on("error", (error) => {
+server.on("error", (error: Error) => {
   console.error(`Server failed to start: ${error.message}`);
   process.exit(1);
 });
@@ -34,7 +36,7 @@ server.on("error", (error) => {
  * Closing the server first lets in-flight requests finish instead of being
  * severed mid-response.
  */
-for (const signal of ["SIGINT", "SIGTERM"]) {
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     console.log(`Received ${signal}, shutting down.`);
     server.close(() => {

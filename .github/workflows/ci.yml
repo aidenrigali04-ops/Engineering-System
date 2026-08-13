@@ -39,8 +39,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Node runs the TypeScript directly, so nothing is compiled first.
       - name: Run tests
         run: npm test
+
+      # Development never compiles, which means a build could break without
+      # anyone noticing until a deploy. This is the only thing that would.
+      - name: Build for production
+        run: npm run build
+
+      - name: Check the built output starts and serves traffic
+        run: |
+          PORT=3000 node dist/server.js &
+          for _ in $(seq 1 20); do
+            curl -fsS http://localhost:3000/health && break
+            sleep 0.5
+          done
+          curl -fsS http://localhost:3000/health | grep -q '"status":"ok"'
 
   lint:
     name: Lint and format
@@ -60,7 +75,10 @@ jobs:
 
       # Kept as separate steps so a failure names the tool that failed rather
       # than reporting one opaque red job.
-      - name: Lint JavaScript
+      - name: Check types
+        run: npm run typecheck
+
+      - name: Lint TypeScript
         run: npm run lint
 
       - name: Lint markdown
@@ -106,4 +124,4 @@ jobs:
       - name: Validate branch name
         env:
           BRANCH_NAME: ${{ github.head_ref }}
-        run: node scripts/check-branch-name.js "$BRANCH_NAME"
+        run: node scripts/check-branch-name.ts "$BRANCH_NAME"

@@ -9,9 +9,9 @@ Features exist only as excuses to exercise the tooling.
 
 ## Status
 
-`main` is protected, changes land through pull requests, and CI runs tests,
-linting, and formatting on every one. The service currently exposes a single
-health endpoint.
+`main` is protected, changes land through pull requests, and CI type-checks,
+tests, lints, and builds every one. The service is TypeScript on Node, and
+exposes a health endpoint plus a tracked repositories resource held in memory.
 
 ## Repository layout
 
@@ -24,14 +24,16 @@ health endpoint.
 ├── .markdownlint-cli2.jsonc    Markdown lint rules
 ├── .nvmrc                      Node version used locally and in CI
 ├── .prettierrc.json            Formatting rules
-├── eslint.config.js            JavaScript lint rules
+├── eslint.config.js            Lint rules
 ├── package.json                Scripts and pinned tooling
+├── tsconfig.json               Type checking rules
+├── tsconfig.build.json         Production build settings
 ├── scripts/                    Command line entry points used by CI
-├── src/app.js                  Routing, request parsing, status codes
-├── src/config.js               Configuration read from the environment
-├── src/repositories.js         Tracked repositories: validation and rules
-├── src/server.js               Entry point: listens and shuts down cleanly
-├── src/store.js                Storage, behind a swappable interface
+├── src/app.ts                  Routing, request parsing, status codes
+├── src/config.ts               Configuration read from the environment
+├── src/repositories.ts         Tracked repositories: validation and rules
+├── src/server.ts               Entry point: listens and shuts down cleanly
+├── src/store.ts                Storage, behind a swappable interface
 ├── test/                       Tests, mirroring src/
 ├── CONTRIBUTING.md             Branch protection rules and the git workflow
 └── README.md                   This file
@@ -39,15 +41,32 @@ health endpoint.
 
 ## Local setup
 
-Requires the Node version in `.nvmrc`.
+Requires the Node version in `.nvmrc`. Anything older cannot run TypeScript
+without a compile step, and Node 20 and earlier are past end of life.
 
 ```bash
 git clone https://github.com/aidenrigali04-ops/Engineering-System.git
 cd Engineering-System
-nvm use          # or install the version named in .nvmrc
+nvm install      # install the version named in .nvmrc
+nvm use
 npm ci           # install exactly what the lockfile specifies
 npm run check    # run everything CI runs
 ```
+
+## TypeScript without a build step
+
+Node runs `.ts` files directly by stripping the types out, so development never
+waits on a compiler. `tsconfig.json` sets `erasableSyntaxOnly`, which rejects
+any syntax Node cannot strip on its own — enums, for instance — and keeps that
+guarantee from quietly breaking.
+
+Type *checking* is therefore a separate job from running the code. `npm run
+typecheck` is what actually verifies types, and CI runs it, because stripping
+types is not the same as checking them.
+
+`npm run build` compiles to `dist/` for production, rewriting `./app.ts`
+imports to `./app.js` on the way out. CI builds and then starts the result, so
+a broken build cannot reach `main` unnoticed.
 
 ## Running the service
 
@@ -135,10 +154,13 @@ Any other route returns 404 with `{ "error": "not_found" }`.
 | --- | --- |
 | `npm start` | Start the service |
 | `npm run dev` | Start with automatic restart on file changes |
+| `npm run build` | Compile to `dist/` for production |
+| `npm run start:built` | Run the compiled output, as production would |
+| `npm run typecheck` | Check types without emitting anything |
 | `npm test` | Run the test suite |
 | `npm run test:watch` | Re-run tests as files change |
 | `npm run test:coverage` | Run tests with a coverage report |
-| `npm run lint` | Lint JavaScript |
+| `npm run lint` | Lint TypeScript |
 | `npm run lint:md` | Lint markdown |
 | `npm run format` | Rewrite files to match the formatting rules |
 | `npm run format:check` | Fail if anything is unformatted |
@@ -150,8 +172,8 @@ Tests live in `test/`, mirroring `src/`, and run in two layers:
 
 | Layer | Example | What it catches |
 | --- | --- | --- |
-| Unit | `test/config.test.js` | Logic errors inside one function |
-| Integration | `test/app.test.js` | Wiring: routing, status codes, response bodies |
+| Unit | `test/config.test.ts` | Logic errors inside one function |
+| Integration | `test/app.test.ts` | Wiring: routing, status codes, response bodies |
 
 The integration tests start the real server on an ephemeral port and make real
 HTTP requests against it. Nothing is stubbed, so they fail if the pieces stop
@@ -184,7 +206,7 @@ Tooling to layer in, roughly in the order it becomes useful:
 - [x] Dependency management and lockfiles
 - [ ] Pre-commit hooks so failures surface before pushing
 - [ ] Automated dependency updates
-- [ ] Static type checking
+- [x] Static type checking
 - [x] Issue tracking and project planning
 - [ ] Semantic versioning and releases
 - [ ] Containerization

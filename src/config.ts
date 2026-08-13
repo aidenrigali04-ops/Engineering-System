@@ -14,19 +14,19 @@ export const DEFAULT_PORT = 3000;
 const MIN_PORT = 0;
 const MAX_PORT = 65535;
 
+export type Environment = Record<string, string | undefined>;
+
 /**
- * @param {Record<string, string | undefined>} env
- * @returns {number}
  * @throws {Error} when PORT is set but is not a usable port number
  */
-export function resolvePort(env = {}) {
+export function resolvePort(env: Environment = {}): number {
   const raw = env.PORT;
 
   if (raw === undefined) {
     return DEFAULT_PORT;
   }
 
-  const trimmed = String(raw).trim();
+  const trimmed = raw.trim();
 
   if (trimmed === "") {
     return DEFAULT_PORT;
@@ -36,10 +36,9 @@ export function resolvePort(env = {}) {
   // which accept things a port is not: Number("0x10") is 16, Number("  ") is 0,
   // and parseInt("3000abc") is 3000. Any of those would start the server
   // somewhere the operator did not ask for.
+  const parsed = Number(trimmed);
   const invalid =
-    !/^\d+$/.test(trimmed) ||
-    Number(trimmed) < MIN_PORT ||
-    Number(trimmed) > MAX_PORT;
+    !/^\d+$/.test(trimmed) || parsed < MIN_PORT || parsed > MAX_PORT;
 
   if (invalid) {
     throw new Error(
@@ -47,5 +46,5 @@ export function resolvePort(env = {}) {
     );
   }
 
-  return Number(trimmed);
+  return parsed;
 }

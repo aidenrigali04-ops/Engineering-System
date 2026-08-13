@@ -1,0 +1,42 @@
+{
+  // Type checking only. Nothing is emitted here: Node runs the TypeScript
+  // directly during development, so a build would produce files nobody uses.
+  // tsconfig.build.json handles the production build.
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    "strict": true,
+
+    // Beyond strict. Each of these catches a real class of bug rather than
+    // enforcing a style, which is the bar for turning one on.
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    // Refuse any syntax Node cannot strip on its own, such as enums and
+    // parameter properties. This is what keeps `node src/server.ts` working
+    // without a compile step.
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+
+    // Imports name the .ts file that actually exists on disk, and the build
+    // rewrites those to .js on the way out.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    "noEmit": true
+  },
+  "include": ["src", "test", "scripts"]
+}

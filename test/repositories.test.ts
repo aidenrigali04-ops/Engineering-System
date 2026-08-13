@@ -1,12 +1,20 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { createRepositories, validateInput } from "../src/repositories.js";
-import { createStore } from "../src/store.js";
+import {
+  createRepositories,
+  validateInput,
+  type Repositories,
+  type TrackedRepository,
+} from "../src/repositories.ts";
+import { createStore, type Store } from "../src/store.ts";
 
 /** A fresh store per test, so no test can be affected by another's state. */
-function subject() {
-  const store = createStore();
+function subject(): {
+  store: Store<TrackedRepository>;
+  repositories: Repositories;
+} {
+  const store = createStore<TrackedRepository>();
   return { store, repositories: createRepositories(store) };
 }
 
@@ -22,16 +30,18 @@ describe("validateInput", () => {
   });
 
   describe("rejects", () => {
-    for (const [label, value] of [
+    const notObjects: Array<[string, unknown]> = [
       ["null", null],
       ["a string", "owner=octocat"],
       ["an array", [VALID]],
       ["a number", 7],
-    ]) {
+    ];
+
+    for (const [label, value] of notObjects) {
       it(`${label} as the whole body`, () => {
         const problems = validateInput(value);
         assert.equal(problems.length, 1);
-        assert.match(problems[0], /must be a JSON object/);
+        assert.match(problems[0] ?? "", /must be a JSON object/);
       });
     }
 
@@ -78,9 +88,11 @@ describe("validateInput", () => {
     });
 
     it("a name over 100 characters", () => {
-      assert.ok(
-        validateInput({ owner: "octocat", name: "a".repeat(101) }).length > 0,
-      );
+      const problems = validateInput({
+        owner: "octocat",
+        name: "a".repeat(101),
+      });
+      assert.ok(problems.length > 0);
     });
 
     it('a name of "." or ".."', () => {
@@ -100,16 +112,19 @@ describe("repositories.create", () => {
     const { repositories } = subject();
     const result = await repositories.create(VALID);
 
-    assert.equal(result.ok, true);
+    // assert.ok narrows the result union, so `result.value` below is typed as
+    // a repository rather than as possibly-absent.
+    assert.ok(result.ok);
     assert.equal(result.value.owner, VALID.owner);
     assert.equal(result.value.name, VALID.name);
   });
 
   it("derives a full name", async () => {
     const { repositories } = subject();
-    const { value } = await repositories.create(VALID);
+    const result = await repositories.create(VALID);
 
-    assert.equal(value.fullName, "aidenrigali04-ops/Engineering-System");
+    assert.ok(result.ok);
+    assert.equal(result.value.fullName, "aidenrigali04-ops/Engineering-System");
   });
 
   it("assigns an id the caller did not choose", async () => {
@@ -117,22 +132,26 @@ describe("repositories.create", () => {
     const first = await repositories.create(VALID);
     const second = await repositories.create({ owner: "octocat", name: "b" });
 
+    assert.ok(first.ok);
+    assert.ok(second.ok);
     assert.match(first.value.id, /^[0-9a-f-]{36}$/);
     assert.notEqual(first.value.id, second.value.id);
   });
 
   it("records when tracking started, as an ISO timestamp", async () => {
     const { repositories } = subject();
-    const { value } = await repositories.create(VALID);
+    const result = await repositories.create(VALID);
 
-    assert.equal(value.trackedAt, new Date(value.trackedAt).toISOString());
+    assert.ok(result.ok);
+    const { trackedAt } = result.value;
+    assert.equal(trackedAt, new Date(trackedAt).toISOString());
   });
 
   it("rejects invalid input without storing anything", async () => {
     const { repositories, store } = subject();
     const result = await repositories.create({ owner: "" });
 
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.code, "invalid");
     assert.deepEqual(await store.list(), []);
   });
@@ -143,7 +162,7 @@ describe("repositories.create", () => {
       await repositories.create(VALID);
       const result = await repositories.create(VALID);
 
-      assert.equal(result.ok, false);
+      assert.ok(!result.ok);
       assert.equal(result.code, "conflict");
     });
 
@@ -157,6 +176,7 @@ describe("repositories.create", () => {
         name: "hello",
       });
 
+      assert.ok(!result.ok);
       assert.equal(result.code, "conflict");
     });
 
@@ -174,9 +194,10 @@ describe("repositories.get", () => {
   it("returns a stored repository", async () => {
     const { repositories } = subject();
     const created = await repositories.create(VALID);
-    const found = await repositories.get(created.value.id);
+    assert.ok(created.ok);
 
-    assert.equal(found.ok, true);
+    const found = await repositories.get(created.value.id);
+    assert.ok(found.ok);
     assert.deepEqual(found.value, created.value);
   });
 
@@ -184,7 +205,7 @@ describe("repositories.get", () => {
     const { repositories } = subject();
     const result = await repositories.get("does-not-exist");
 
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.code, "not_found");
   });
 });
@@ -192,7 +213,10 @@ describe("repositories.get", () => {
 describe("repositories.list", () => {
   it("is empty to begin with", async () => {
     const { repositories } = subject();
-    assert.deepEqual((await repositories.list()).value, []);
+    const result = await repositories.list();
+
+    assert.ok(result.ok);
+    assert.deepEqual(result.value, []);
   });
 
   it("returns the newest first", async () => {
@@ -202,18 +226,23 @@ describe("repositories.list", () => {
     // creates in the same millisecond would make this assertion a coin flip.
     await store.insert({
       id: "1",
+      owner: "a",
+      name: "older",
       fullName: "a/older",
       trackedAt: "2020-01-01T00:00:00.000Z",
     });
     await store.insert({
       id: "2",
+      owner: "a",
+      name: "newer",
       fullName: "a/newer",
       trackedAt: "2024-01-01T00:00:00.000Z",
     });
 
-    const { value } = await repositories.list();
+    const result = await repositories.list();
+    assert.ok(result.ok);
     assert.deepEqual(
-      value.map((row) => row.fullName),
+      result.value.map((row) => row.fullName),
       ["a/newer", "a/older"],
     );
   });
@@ -223,10 +252,11 @@ describe("repositories.remove", () => {
   it("deletes a stored repository", async () => {
     const { repositories, store } = subject();
     const created = await repositories.create(VALID);
+    assert.ok(created.ok);
 
     const result = await repositories.remove(created.value.id);
 
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     assert.deepEqual(await store.list(), []);
   });
 
@@ -234,15 +264,17 @@ describe("repositories.remove", () => {
     const { repositories } = subject();
     const result = await repositories.remove("does-not-exist");
 
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.code, "not_found");
   });
 
   it("frees the name for reuse", async () => {
     const { repositories } = subject();
     const created = await repositories.create(VALID);
+    assert.ok(created.ok);
     await repositories.remove(created.value.id);
 
-    assert.equal((await repositories.create(VALID)).ok, true);
+    const recreated = await repositories.create(VALID);
+    assert.ok(recreated.ok);
   });
 });

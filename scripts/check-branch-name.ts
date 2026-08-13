@@ -2,10 +2,10 @@
  * Fails with a non-zero exit code when the given branch name does not follow
  * the convention in CONTRIBUTING.md. Run by the "Branch name" job in CI.
  *
- * Usage: node scripts/check-branch-name.js <branch-name>
+ * Usage: node scripts/check-branch-name.ts <branch-name>
  */
 
-import { validateBranchName } from "../src/branch-name.js";
+import { validateBranchName } from "../src/branch-name.ts";
 
 const name = process.argv[2];
 const { valid, reason } = validateBranchName(name);

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_PORT, resolvePort } from "../src/config.js";
+import { DEFAULT_PORT, resolvePort } from "../src/config.ts";
 
 describe("resolvePort", () => {
   describe("falls back to the default", () => {

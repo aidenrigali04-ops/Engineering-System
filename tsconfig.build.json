@@ -1,0 +1,15 @@
+{
+  // The production build. Tests and scripts are deliberately excluded: they
+  // are development tools and have no business being shipped.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+
+    // Stack traces from the built output point back at the TypeScript that
+    // produced them, rather than at compiled lines nobody wrote.
+    "sourceMap": true
+  },
+  "include": ["src"]
+}
