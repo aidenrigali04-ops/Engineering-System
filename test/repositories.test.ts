@@ -7,14 +7,17 @@ import {
   type Repositories,
   type TrackedRepository,
 } from "../src/repositories.ts";
-import { createStore, type Store } from "../src/store.ts";
+import type { Store } from "../src/store.ts";
+import { createFakeStore } from "./fake-store.ts";
 
 /** A fresh store per test, so no test can be affected by another's state. */
 function subject(): {
   store: Store<TrackedRepository>;
   repositories: Repositories;
 } {
-  const store = createStore<TrackedRepository>();
+  const store = createFakeStore<TrackedRepository>({
+    uniqueBy: (row) => row.fullName.toLowerCase(),
+  });
   return { store, repositories: createRepositories(store) };
 }
 

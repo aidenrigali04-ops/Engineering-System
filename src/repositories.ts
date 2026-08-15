@@ -8,7 +8,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import type { Identified, Store } from "./store.ts";
+import { UniqueViolationError, type Identified, type Store } from "./store.ts";
 
 export interface TrackedRepository extends Identified {
   id: string;
@@ -125,27 +125,25 @@ export function createRepositories(
       const { owner, name } = input as RepositoryInput;
       const fullName = `${owner}/${name}`;
 
-      // A linear scan, which is fine for a Map and becomes a unique index the
-      // moment this is a real table. Worth doing now so the behaviour is
-      // settled before the storage changes underneath it.
-      const existing = await store.list();
-      const duplicate = existing.some(
-        (row) => row.fullName.toLowerCase() === fullName.toLowerCase(),
-      );
-
-      if (duplicate) {
-        return failure("conflict", [`${fullName} is already tracked.`]);
+      // Uniqueness is the store's job, enforced by a constraint the database
+      // checks atomically. The scan this replaces had a race window: two
+      // concurrent creates could both pass the check and both insert.
+      try {
+        return success(
+          await store.insert({
+            id: randomUUID(),
+            owner,
+            name,
+            fullName,
+            trackedAt: new Date().toISOString(),
+          }),
+        );
+      } catch (error) {
+        if (error instanceof UniqueViolationError) {
+          return failure("conflict", [`${fullName} is already tracked.`]);
+        }
+        throw error;
       }
-
-      return success(
-        await store.insert({
-          id: randomUUID(),
-          owner,
-          name,
-          fullName,
-          trackedAt: new Date().toISOString(),
-        }),
-      );
     },
 
     async get(id: string): Promise<Result<TrackedRepository>> {

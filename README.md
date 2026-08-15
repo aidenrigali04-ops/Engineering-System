@@ -11,7 +11,8 @@ Features exist only as excuses to exercise the tooling.
 
 `main` is protected, changes land through pull requests, and CI type-checks,
 tests, lints, and builds every one. The service is TypeScript on Node, and
-exposes a health endpoint plus a tracked repositories resource held in memory.
+exposes a health endpoint plus a tracked repositories resource stored in
+Postgres.
 
 ## Repository layout
 
@@ -24,16 +25,19 @@ exposes a health endpoint plus a tracked repositories resource held in memory.
 ├── .markdownlint-cli2.jsonc    Markdown lint rules
 ├── .nvmrc                      Node version used locally and in CI
 ├── .prettierrc.json            Formatting rules
+├── compose.yaml                Local Postgres, via Docker Compose
 ├── eslint.config.js            Lint rules
 ├── package.json                Scripts and pinned tooling
+├── prisma/                     Database schema and migrations
 ├── tsconfig.json               Type checking rules
 ├── tsconfig.build.json         Production build settings
 ├── scripts/                    Command line entry points used by CI
 ├── src/app.ts                  Routing, request parsing, status codes
 ├── src/config.ts               Configuration read from the environment
+├── src/pg-store.ts             The Postgres-backed store, via Prisma
 ├── src/repositories.ts         Tracked repositories: validation and rules
 ├── src/server.ts               Entry point: listens and shuts down cleanly
-├── src/store.ts                Storage, behind a swappable interface
+├── src/store.ts                Storage interface; implemented by pg-store.ts
 ├── test/                       Tests, mirroring src/
 ├── CONTRIBUTING.md             Branch protection rules and the git workflow
 └── README.md                   This file
@@ -49,8 +53,11 @@ git clone https://github.com/aidenrigali04-ops/Engineering-System.git
 cd Engineering-System
 nvm install      # install the version named in .nvmrc
 nvm use
-npm ci           # install exactly what the lockfile specifies
-npm run check    # run everything CI runs
+npm ci                  # install exactly what the lockfile specifies
+docker compose up -d    # start local Postgres
+cp .env.example .env    # point the service at it
+npm run db:migrate      # create the schema
+npm run check           # run everything CI runs
 ```
 
 ## TypeScript without a build step
@@ -100,10 +107,35 @@ The check is deliberately shallow. It should only fail for conditions that the
 caller's reaction would actually fix — restarting this process cannot repair a
 third party's outage, so external dependencies are not checked here.
 
+### `GET /ready`
+
+Reports whether this instance can do real work right now, which is a
+different question from `/health`: it checks the database, so it fails when
+the database is unreachable even though the process itself is fine.
+
+```bash
+curl http://localhost:3000/ready
+```
+
+```json
+{ "status": "ready" }
+```
+
+or, when the database cannot be reached:
+
+```json
+{ "status": "unavailable" }
+```
+
+| Status | Body |
+| --- | --- |
+| `200` | `{ "status": "ready" }` |
+| `503` | `{ "status": "unavailable" }` |
+
 ### Tracked repositories
 
-A tracked repository is one this service watches. Storage is currently
-in-memory, so everything is lost when the process restarts.
+A tracked repository is one this service watches. Storage is Postgres, via
+Prisma.
 
 | Method | Path | Result |
 | --- | --- | --- |
@@ -147,6 +179,7 @@ Any other route returns 404 with `{ "error": "not_found" }`.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `3000` | Port to listen on. `0` asks the OS for a free port. |
+| `DATABASE_URL` | (required) | Postgres connection string |
 
 ## Commands
 
@@ -165,6 +198,8 @@ Any other route returns 404 with `{ "error": "not_found" }`.
 | `npm run format` | Rewrite files to match the formatting rules |
 | `npm run format:check` | Fail if anything is unformatted |
 | `npm run check` | Everything above, in the order CI runs it |
+| `npm run db:migrate` | Create and apply a migration in development |
+| `npm run db:deploy` | Apply existing migrations, as production would |
 
 ## Tests
 
