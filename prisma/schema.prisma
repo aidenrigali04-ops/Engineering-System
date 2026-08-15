@@ -8,11 +8,12 @@ datasource db {
 }
 
 model Repository {
-  id        String   @id
-  owner     String
-  name      String
-  fullName  String   @map("full_name")
-  trackedAt DateTime @map("tracked_at") @db.Timestamptz(6)
+  id            String   @id
+  owner         String
+  name          String
+  fullName      String   @map("full_name")
+  fullNameLower String   @unique @map("full_name_lower")
+  trackedAt     DateTime @map("tracked_at") @db.Timestamptz(6)
 
   @@map("repositories")
 }

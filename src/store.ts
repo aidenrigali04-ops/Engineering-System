@@ -60,3 +60,17 @@ export function createStore<T extends Identified>(): Store<T> {
     },
   };
 }
+
+/**
+ * Thrown by insert when a uniqueness rule in the storage layer is violated.
+ *
+ * Defined here, beside the Store interface, because it is part of the storage
+ * contract rather than a detail of any one implementation: callers catch this
+ * type without knowing which database produced it.
+ */
+export class UniqueViolationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UniqueViolationError";
+  }
+}
