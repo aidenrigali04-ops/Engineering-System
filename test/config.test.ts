@@ -1,7 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_PORT, resolvePort } from "../src/config.ts";
+import {
+  DEFAULT_PORT,
+  resolveDatabaseUrl,
+  resolvePort,
+} from "../src/config.ts";
 
 describe("resolvePort", () => {
   describe("falls back to the default", () => {
@@ -69,5 +73,32 @@ describe("resolvePort", () => {
     it("a hexadecimal literal, which Number would happily accept", () => {
       assert.throws(() => resolvePort({ PORT: "0x10" }), /must be an integer/);
     });
+  });
+});
+
+describe("resolveDatabaseUrl", () => {
+  it("returns a postgresql URL unchanged", () => {
+    const url = "postgresql://user:pass@localhost:5432/db";
+    assert.equal(resolveDatabaseUrl({ DATABASE_URL: url }), url);
+  });
+
+  it("accepts the postgres:// scheme too", () => {
+    const url = "postgres://user:pass@localhost:5432/db";
+    assert.equal(resolveDatabaseUrl({ DATABASE_URL: url }), url);
+  });
+
+  it("throws when DATABASE_URL is missing", () => {
+    assert.throws(() => resolveDatabaseUrl({}), /DATABASE_URL/);
+  });
+
+  it("throws when DATABASE_URL is blank", () => {
+    assert.throws(() => resolveDatabaseUrl({ DATABASE_URL: "  " }), /blank/);
+  });
+
+  it("throws when the scheme is not postgres", () => {
+    assert.throws(
+      () => resolveDatabaseUrl({ DATABASE_URL: "mysql://nope" }),
+      /postgresql/,
+    );
   });
 });
