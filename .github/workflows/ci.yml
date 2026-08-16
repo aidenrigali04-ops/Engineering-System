@@ -23,6 +23,25 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: evalgate
+          POSTGRES_PASSWORD: evalgate
+          POSTGRES_DB: evalgate
+        ports:
+          - 5432:5432
+        # CI must wait for Postgres to accept connections, not just for the
+        # container to exist; migrations run against it in the next step.
+        options: >-
+          --health-cmd "pg_isready -U evalgate"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+
+    env:
+      DATABASE_URL: postgresql://evalgate:evalgate@localhost:5432/evalgate
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -38,6 +57,11 @@ jobs:
       # resolve new versions, which is how CI and local machines drift apart.
       - name: Install dependencies
         run: npm ci
+
+      # Applies the committed migrations to a fresh database. This is the test
+      # that migrations actually work; the suite then runs against the result.
+      - name: Apply database migrations
+        run: npm run db:deploy
 
       # Node runs the TypeScript directly, so nothing is compiled first.
       - name: Run tests
