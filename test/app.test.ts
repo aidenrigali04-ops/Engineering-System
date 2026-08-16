@@ -14,7 +14,6 @@ import { createApp } from "../src/app.ts";
 import { createPgRepositoryStore } from "../src/pg-store.ts";
 import type { TrackedRepository } from "../src/repositories.ts";
 import { createTestDb, type TestDb } from "./db.ts";
-import { createFakeStore } from "./fake-store.ts";
 
 /**
  * Port 0 asks the operating system for any free port. Hardcoding one makes
@@ -287,12 +286,14 @@ describe("repositories API", () => {
 
   describe("isolation between app instances", () => {
     it("does not share storage with another app", async () => {
-      // A fake store here, not another Postgres-backed one: two apps pointed
-      // at the same database are *supposed* to share data — that is the
-      // entire point of persistence. What this guards against is app.ts
-      // ignoring the store it was given in favour of some shared state of
-      // its own.
-      const other = createApp({ store: createFakeStore<TrackedRepository>() });
+      // A second real schema, not a stand-in: this suite is integration
+      // tests against real Postgres, so isolation is proven the same way
+      // production would get it — a different database — rather than by
+      // swapping in a different store implementation.
+      const otherDb = await createTestDb();
+      const other = createApp({
+        store: createPgRepositoryStore(otherDb.prisma),
+      });
       const otherUrl = await listenOnEphemeralPort(other);
 
       try {
@@ -305,6 +306,7 @@ describe("repositories API", () => {
         assert.deepEqual(data, [], "a second app should start empty");
       } finally {
         await close(other);
+        await otherDb.destroy();
       }
     });
   });
@@ -336,7 +338,7 @@ describe("GET /ready", () => {
 
 describe("server lifecycle", () => {
   it("releases its port when closed", async () => {
-    const server = createApp({ store: createFakeStore<TrackedRepository>() });
+    const server = createApp({ store: createPgRepositoryStore(db.prisma) });
     await listenOnEphemeralPort(server);
     assert.equal(server.listening, true);
 
