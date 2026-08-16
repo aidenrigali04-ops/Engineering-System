@@ -48,3 +48,32 @@ export function resolvePort(env: Environment = {}): number {
 
   return parsed;
 }
+
+/**
+ * @throws {Error} when DATABASE_URL is missing, blank, or not a Postgres URL
+ */
+export function resolveDatabaseUrl(env: Environment = {}): string {
+  const raw = env.DATABASE_URL;
+
+  if (raw === undefined) {
+    throw new Error(
+      "DATABASE_URL is required. Copy .env.example to .env for local " +
+        "development, or set it in the environment.",
+    );
+  }
+
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    throw new Error("DATABASE_URL is set but blank.");
+  }
+
+  // The scheme is checked here so a typo fails at startup with a clear
+  // message, rather than deep inside the database client with an opaque one.
+  if (!/^postgres(ql)?:\/\//.test(trimmed)) {
+    throw new Error(
+      `DATABASE_URL must start with postgresql:// or postgres://, but was ${JSON.stringify(raw)}.`,
+    );
+  }
+
+  return trimmed;
+}

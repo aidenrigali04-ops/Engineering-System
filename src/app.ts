@@ -22,7 +22,7 @@ import {
   type Repositories,
   type TrackedRepository,
 } from "./repositories.ts";
-import { createStore, type Store } from "./store.ts";
+import type { Store } from "./store.ts";
 
 /**
  * Bodies are capped because an unbounded read is a denial-of-service waiting
@@ -128,11 +128,28 @@ function handleHealth(_req: IncomingMessage, res: ServerResponse): void {
   });
 }
 
+/**
+ * Reports whether this instance should receive traffic, which is a different
+ * question from /health. Liveness asks "would a restart fix this process?"
+ * Readiness asks "can it do real work right now?" — and a database it cannot
+ * reach means no, without meaning a restart would help.
+ */
+function buildReadyHandler(check: () => Promise<void>): Handler {
+  return async (_req, res) => {
+    try {
+      await check();
+      sendJson(res, 200, { status: "ready" });
+    } catch {
+      sendJson(res, 503, { status: "unavailable" });
+    }
+  };
+}
+
 function handleNotFound(_req: IncomingMessage, res: ServerResponse): void {
   sendJson(res, 404, { error: "not_found" });
 }
 
-function buildRoutes(repositories: Repositories): Route[] {
+function buildRoutes(repositories: Repositories, ready: Handler): Route[] {
   async function handleCreate(
     req: IncomingMessage,
     res: ServerResponse,
@@ -216,6 +233,7 @@ function buildRoutes(repositories: Repositories): Route[] {
 
   return [
     { method: "GET", path: "/health", handler: handleHealth },
+    { method: "GET", path: "/ready", handler: ready },
     { method: "POST", path: "/repositories", handler: handleCreate },
     { method: "GET", path: "/repositories", handler: handleList },
     { method: "GET", path: "/repositories/:id", handler: handleGet },
@@ -267,12 +285,19 @@ function matchRoute(
 
 export interface AppDependencies {
   /** Injected so tests can supply isolated storage per app instance. */
-  store?: Store<TrackedRepository>;
+  store: Store<TrackedRepository>;
+  /**
+   * Resolves when the service can do real work; throws when it cannot.
+   * Wired to a database ping in production. Optional so the common case —
+   * ready when the store works — needs no ceremony in tests.
+   */
+  checkReadiness?: () => Promise<void>;
 }
 
-export function createApp({ store }: AppDependencies = {}): Server {
+export function createApp({ store, checkReadiness }: AppDependencies): Server {
   const routes = buildRoutes(
-    createRepositories(store ?? createStore<TrackedRepository>()),
+    createRepositories(store),
+    buildReadyHandler(checkReadiness ?? (async () => {})),
   );
 
   return createServer((req, res) => {

@@ -9,5 +9,7 @@
     // beneath several different features.
     "MD024": { "siblings_only": true },
   },
-  "ignores": ["node_modules/**"],
+  // .superpowers/ is gitignored task-runner scratch space (task briefs,
+  // progress ledgers), not project documentation, so it is not linted.
+  "ignores": ["node_modules/**", ".superpowers/**"],
 }

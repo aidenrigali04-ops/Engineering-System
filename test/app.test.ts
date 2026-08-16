@@ -11,7 +11,9 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { createApp } from "../src/app.ts";
+import { createPgRepositoryStore } from "../src/pg-store.ts";
 import type { TrackedRepository } from "../src/repositories.ts";
+import { createTestDb, type TestDb } from "./db.ts";
 
 /**
  * Port 0 asks the operating system for any free port. Hardcoding one makes
@@ -49,19 +51,25 @@ interface ErrorBody {
   details?: string[];
 }
 
+// One database, and one running server, shared by every suite below. The
+// point of these tests is to exercise real HTTP and real Postgres, not to pay
+// for a fresh schema per describe block.
+let db: TestDb;
+let server: Server;
+let baseUrl: string;
+
+before(async () => {
+  db = await createTestDb();
+  server = createApp({ store: createPgRepositoryStore(db.prisma) });
+  baseUrl = await listenOnEphemeralPort(server);
+});
+
+after(async () => {
+  await close(server);
+  await db.destroy();
+});
+
 describe("HTTP API", () => {
-  let server: Server;
-  let baseUrl: string;
-
-  before(async () => {
-    server = createApp();
-    baseUrl = await listenOnEphemeralPort(server);
-  });
-
-  // Without this the process keeps an open handle and the test run hangs
-  // instead of exiting.
-  after(() => close(server));
-
   describe("GET /health", () => {
     it("responds 200", async () => {
       const response = await fetch(`${baseUrl}/health`);
@@ -123,16 +131,6 @@ describe("HTTP API", () => {
 });
 
 describe("repositories API", () => {
-  let server: Server;
-  let baseUrl: string;
-
-  before(async () => {
-    server = createApp();
-    baseUrl = await listenOnEphemeralPort(server);
-  });
-
-  after(() => close(server));
-
   // State persists across tests within one server, so each test works on a
   // name no other test uses. Tests that depend on each other's leftovers pass
   // in order and fail the moment anything is reordered or run alone.
@@ -288,7 +286,14 @@ describe("repositories API", () => {
 
   describe("isolation between app instances", () => {
     it("does not share storage with another app", async () => {
-      const other = createApp();
+      // A second real schema, not a stand-in: this suite is integration
+      // tests against real Postgres, so isolation is proven the same way
+      // production would get it — a different database — rather than by
+      // swapping in a different store implementation.
+      const otherDb = await createTestDb();
+      const other = createApp({
+        store: createPgRepositoryStore(otherDb.prisma),
+      });
       const otherUrl = await listenOnEphemeralPort(other);
 
       try {
@@ -301,14 +306,39 @@ describe("repositories API", () => {
         assert.deepEqual(data, [], "a second app should start empty");
       } finally {
         await close(other);
+        await otherDb.destroy();
       }
     });
   });
 });
 
+describe("GET /ready", () => {
+  it("responds 200 when the database answers", async () => {
+    const response = await fetch(`${baseUrl}/ready`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await readJson(response), { status: "ready" });
+  });
+
+  it("responds 503 when the readiness check fails", async () => {
+    const failing = createApp({
+      store: createPgRepositoryStore(db.prisma),
+      checkReadiness: async () => {
+        throw new Error("database unreachable");
+      },
+    });
+    const failingUrl = await listenOnEphemeralPort(failing);
+
+    const response = await fetch(`${failingUrl}/ready`);
+    assert.equal(response.status, 503);
+    assert.deepEqual(await readJson(response), { status: "unavailable" });
+
+    await close(failing);
+  });
+});
+
 describe("server lifecycle", () => {
   it("releases its port when closed", async () => {
-    const server = createApp();
+    const server = createApp({ store: createPgRepositoryStore(db.prisma) });
     await listenOnEphemeralPort(server);
     assert.equal(server.listening, true);
 
